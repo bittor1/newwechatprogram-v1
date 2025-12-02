@@ -1,2 +1,96 @@
 <!--pages/sound-settings/sound-settings.wxml-->
-<text>pages/sound-settings/sound-settings.wxml</text>
+<view class="container">
+  <!-- 头部 -->
+  <view class="header">
+    <view class="back-button" bindtap="goBack">
+      <text class="back-icon">←</text>
+    </view>
+    <text class="header-title">音效设置</text>
+    <view class="header-placeholder"></view>
+  </view>
+
+  <view class="content">
+    <!-- 音效开关 -->
+    <view class="card">
+      <view class="row">
+        <text class="label">开启投票音效</text>
+        <switch checked="{{soundEnabled}}" bindchange="onSoundSwitchChange" color="#10B981"/>
+      </view>
+      <view class="row" wx:if="{{currentSoundName}}">
+        <text class="label">当前音效</text>
+        <text class="value">{{currentSoundName}}</text>
+      </view>
+    </view>
+
+    <!-- 录音卡片 -->
+    <view class="recorder-card">
+      <!-- 空闲状态 -->
+      <view class="record-idle" wx:if="{{recordingState === 'idle'}}">
+        <button class="btn record-btn" bindtap="startRecording">
+          <image class="icon" wx:if="{{hasMicIcon}}" src="/images/mic-icon.png" mode="aspectFit"></image>
+          <text wx:else>🎤</text>
+          <text>点击开始录制音效</text>
+        </button>
+        <text class="tip">录制一段声音作为投票时的音效</text>
+      </view>
+
+      <!-- 录音中状态 -->
+      <view class="record-in-progress" wx:if="{{recordingState === 'recording'}}">
+        <text class="timer">{{formattedRecordTime}}</text>
+        <text class="recording-tip">正在录音...</text>
+        <button class="btn stop-btn" bindtap="stopRecording">停止录音</button>
+      </view>
+
+      <!-- 录音完成/回放状态 -->
+      <view class="record-playback" wx:if="{{recordingState === 'recorded'}}">
+        <view class="playback-controls">
+          <button class="btn playback-btn" bindtap="playRecording">
+            <image class="icon" wx:if="{{hasPlayIcon}}" src="/images/play-icon.png" mode="aspectFit"></image>
+            <text wx:else>▶️</text>
+            <text>试听录音</text>
+          </button>
+        </view>
+        <view class="playback-actions">
+          <button class="btn" bindtap="cancelRecording">重新录制</button>
+          <button class="btn primary" bindtap="saveRecording">保存音效</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 用户音效库 -->
+    <view class="user-sounds-section">
+      <view class="section-header" bindtap="toggleSoundsLibrary">
+        <text class="section-title">我的音效库</text>
+        <text class="toggle-icon">{{showSoundsLibrary ? '▼' : '▶'}}</text>
+      </view>
+      
+      <view class="user-sounds-list" wx:if="{{showSoundsLibrary}}">
+        <block wx:if="{{userSounds.length > 0}}">
+          <view class="user-sound-item" wx:for="{{userSounds}}" wx:key="_id">
+            <view class="sound-info">
+              <text class="sound-name">{{item.name || '未命名音效'}}</text>
+              <view>
+                <text class="sound-duration">时长: {{item.formattedDuration}}s</text>
+                <text class="sound-date" style="margin-left: 10rpx;">{{item.formattedCreateTime}}</text>
+              </view>
+            </view>
+            <view class="sound-actions">
+              <view class="action-btn preview-btn" catchtap="previewUserSound" data-file-id="{{item.fileId}}">
+                <text>▶️ 试听</text>
+              </view>
+              <view class="action-btn apply-btn" catchtap="applyUserSound" data-file-id="{{item.fileId}}" data-name="{{item.name}}">
+                <text>✅ 应用</text>
+              </view>
+              <view class="action-btn delete-btn" catchtap="deleteUserSound" data-sound-id="{{item._id}}" data-name="{{item.name}}">
+                <text>🗑️ 删除</text>
+              </view>
+            </view>
+          </view>
+        </block>
+        <view class="empty-sounds" wx:else>
+          <text class="empty-text">暂无录制的音效</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>
