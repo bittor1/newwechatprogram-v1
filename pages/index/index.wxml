@@ -1,6 +1,18 @@
 <view class="page-container">
+  <!-- 滚动通告栏 -->
+  <view class="marquee-notification" wx:if="{{showNotification}}">
+    <view class="marquee-content-box">
+      <view class="marquee-scroll">
+        <text class="marquee-item">{{notificationText}}</text>
+        <text class="marquee-item" aria-hidden="true">{{notificationText}}</text>
+        <text class="marquee-item" aria-hidden="true">{{notificationText}}</text>
+      </view>
+    </view>
+    <view class="marquee-close-btn" catchtap="closeNotification">✕</view>
+  </view>
+
   <!-- 独立的用户头像按钮 - 固定在右上角 -->
-  <view class="top-right-avatar-fixed" catchtap="openUserCenter" data-test="user-center-avatar">
+  <view class="top-right-avatar-fixed" style="top: {{showNotification ? '60px' : '15px'}}" catchtap="openUserCenter" data-test="user-center-avatar">
     <image wx:if="{{userInfo && (userInfo.avatarUrl || userInfo.avatar)}}" class="avatar-image" src="{{userInfo.avatarUrl || userInfo.avatar}}" mode="aspectFill"></image>
     <view wx:else class="avatar-placeholder">👤</view>
   </view>
@@ -13,7 +25,7 @@
     </view>
     
     <view class="title-container text-center mb-16">
-      <text class="season-text text-small">第一赛季</text>
+      <text class="season-text text-small">第二赛季</text>
       <text class="sub-title text-small">London DECHI Leaderboard</text>
       <text class="description text-small">你今天上榜了吗</text>
     </view>

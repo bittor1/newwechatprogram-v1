@@ -1,4 +1,68 @@
 /* pages/index/index.wxss */
+/* 滚动通告栏样式 */
+.marquee-notification {
+  width: 100%;
+  height: 40px;
+  background: linear-gradient(90deg, #10B981, #6EE7B7);
+  display: flex;
+  align-items: center;
+  padding-right: 40px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  z-index: 90;
+  position: relative;
+}
+
+.marquee-content-box {
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  margin-left: 16px;
+  /* mask-image 在小程序中可能兼容性不一，但 Webview 应该支持 */
+  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+.marquee-scroll {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  width: max-content;
+  animation: marquee-slide 20s linear infinite;
+}
+
+.marquee-item {
+  white-space: nowrap;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  padding-right: 50px; /* 使用 padding 代替 margin 确保布局正确 */
+}
+
+.marquee-close-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #ffffff;
+  font-size: 18px;
+  z-index: 91;
+}
+
+@keyframes marquee-slide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.33%); /* 3个重复项，移动1/3实现无缝循环 */
+  }
+}
+
 .page-container {
   height: 100vh;
   background: #F7F8FA;
@@ -34,7 +98,7 @@
 /* 用户头像 - 绝对固定在右上角 */
 .top-right-avatar-fixed {
   position: fixed;
-  top: 15px; /* 恢复原来的位置 */
+  top: 15px; /* 默认值，会在 WXML 中动态覆盖 */
   right: 20px;
   width: 52px;
   height: 52px;
@@ -47,7 +111,7 @@
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
   border: 3px solid #10B981;
   z-index: 100; /* 用户头像按钮层级适中 */
-  transition: transform 0.2s ease;
+  transition: top 0.3s ease, transform 0.2s ease; /* 添加 top 过渡 */
 }
 
 .top-right-avatar-fixed:active {

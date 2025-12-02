@@ -3,6 +3,10 @@ const cloudUtils = require('../../utils/cloudUtils');
 
 Page({
   data: {
+    // 滚动通告栏数据
+    showNotification: true,
+    notificationText: '欢迎来到伦敦必吃榜！快来为你喜欢的美食投票吧！',
+    
     rankings: [],
     totalVotes: 0,
     totalNominations: 0,
@@ -26,6 +30,21 @@ Page({
   onLoad() {
     // 获取应用实例
     const app = getApp();
+
+    // 获取通告栏配置（从云数据库）
+    const db = wx.cloud.database();
+    db.collection('app_config').doc('marquee_config').get()
+      .then(res => {
+        if (res.data) {
+          this.setData({
+            notificationText: res.data.content || this.data.notificationText,
+            showNotification: res.data.isShow !== undefined ? res.data.isShow : true
+          });
+        }
+      })
+      .catch(err => {
+        console.log('未找到通告配置，使用默认值');
+      });
     
     // 在新的登录策略下，只有确认已登录才显示用户信息
     console.log('页面加载，检查登录状态:', {
@@ -612,6 +631,13 @@ Page({
     })
     .catch(err => {
       console.error('记录分享行为失败:', err);
+    });
+  },
+
+  // 关闭滚动通告栏
+  closeNotification() {
+    this.setData({
+      showNotification: false
     });
   },
 
