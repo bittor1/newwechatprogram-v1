@@ -67,6 +67,62 @@ async function createMessage(messageData) {
     
     console.log('[messageManage] 消息创建成功:', result._id)
     
+    // 尝试发送订阅消息
+    if (messageData.receiverId) {
+      try {
+        // 获取接收者信息，拿到openid
+        const receiverRes = await db.collection('users').doc(messageData.receiverId).get()
+        const receiver = receiverRes.data
+        
+        if (receiver && receiver._openid) {
+          const tmplId = 'SBgrWcE3FHh4GzHmBr34TXbUb4nJA32VxOgh_9KcP8E'
+          
+          // 处理内容长度（thing1限制20个字符）
+          let content = messageData.content || '您收到了一条新消息'
+          if (content.length > 20) {
+            content = content.substring(0, 17) + '...'
+          }
+          
+          // 格式化时间 YYYY年MM月DD日 HH:mm
+          const now = new Date()
+          // 调整时区到北京时间 (UTC+8)
+          const utc = now.getTime() + (now.getTimezoneOffset() * 60000)
+          const date = new Date(utc + (3600000 * 8))
+          
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          const hour = String(date.getHours()).padStart(2, '0')
+          const minute = String(date.getMinutes()).padStart(2, '0')
+          const timeStr = `${year}年${month}月${day}日 ${hour}:${minute}`
+          
+          // 构造跳转页面
+          let pagePath = '/pages/index/index' // 默认首页
+          if (messageData.nominationId) {
+            pagePath = `/pages/detail/detail?id=${messageData.nominationId}`
+          }
+          
+          console.log(`[messageManage] 准备发送订阅消息: to=${receiver._openid}, content=${content}`)
+          
+          // 调用微信发送接口
+          await cloud.openapi.subscribeMessage.send({
+            touser: receiver._openid,
+            templateId: tmplId,
+            page: pagePath,
+            data: {
+              thing1: { value: content },
+              time2: { value: timeStr }
+            },
+            miniprogramState: 'formal' // 发送正式版，开发调试时如果没发布可能需改为 developer
+          })
+          console.log('[messageManage] 订阅消息发送成功')
+        }
+      } catch (sendErr) {
+        // 发送失败（通常是用户未订阅）是正常现象，不应阻断流程
+        console.log('[messageManage] 订阅消息发送跳过或失败:', sendErr.message)
+      }
+    }
+    
     return {
       success: true,
       message: '消息创建成功',

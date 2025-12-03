@@ -400,9 +400,9 @@ App({
         const _ = db.command;
         db.collection('entries')
           .where({
-            // 使用一个始终为真的条件来避免全表扫描警告
-            // votes 字段大于等于 0（包括所有条目）
-            votes: _.gte(0)
+            // 获取所有条目，包括负数票的
+            // 使用 _.exists(true) 确保 votes 字段存在
+            votes: _.exists(true)
           })
           .orderBy('votes', 'desc')
           .orderBy('_createTime', 'desc') // 票数相同时，新上榜的排在上面

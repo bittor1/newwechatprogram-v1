@@ -73,7 +73,7 @@ async function addComment(data, userId) {
     nominationId: data.nominationId,
     content: data.content,
     creatorId: userId,
-    creatorName: userInfo.nickname || userInfo.name || '用户',
+    creatorName: '匿名用户',
     creatorAvatar: userInfo.avatar || '/images/placeholder-user.jpg',
     _openid: userId, // 添加openid字段用于权限验证
     parentId: null,
@@ -140,7 +140,7 @@ async function replyComment(data, userId) {
       nominationId: data.nominationId,
       content: data.content,
       creatorId: userId,
-      creatorName: userInfo.nickname || userInfo.name || '用户',
+      creatorName: '匿名用户',
       creatorAvatar: userInfo.avatar || '/images/placeholder-user.jpg',
       _openid: userId, // 添加openid字段用于权限验证
       parentId: data.parentId,
@@ -217,7 +217,12 @@ async function listComments(data) {
       .get();
     
     // 获取每个顶级评论的部分回复
-    const topComments = commentsResult.data;
+    const topComments = commentsResult.data.map(comment => {
+      // 强制显示为匿名用户
+      comment.creatorName = '匿名用户';
+      return comment;
+    });
+
     for (const comment of topComments) {
       // 获取每个顶级评论的前3条回复
       const repliesResult = await db.collection('comments')
@@ -229,7 +234,14 @@ async function listComments(data) {
         .limit(3)
         .get();
       
-      comment.replies = repliesResult.data;
+      comment.replies = repliesResult.data.map(reply => {
+        reply.creatorName = '匿名用户';
+        // 处理回复对象的用户名
+        if (reply.replyTo) {
+          reply.replyTo.userName = '匿名用户';
+        }
+        return reply;
+      });
       
       // 获取回复总数
       const replyCountResult = await db.collection('comments')
@@ -285,9 +297,17 @@ async function listReplies(data) {
       .limit(pageSize)
       .get();
     
+    const replies = repliesResult.data.map(reply => {
+      reply.creatorName = '匿名用户';
+      if (reply.replyTo) {
+        reply.replyTo.userName = '匿名用户';
+      }
+      return reply;
+    });
+
     return {
       success: true,
-      replies: repliesResult.data,
+      replies: replies,
       total: countResult.total,
       page,
       pageSize
@@ -460,10 +480,10 @@ async function createCommentNotification(nominationId, commenterId) {
           data: {
             receiverId: nomination.creatorId,
             senderId: commenterId,
-            senderName: commenter.nickname || commenter.name || '用户',
+            senderName: '匿名用户',
             senderAvatar: commenter.avatar || '/images/placeholder-user.jpg',
             type: 'comment',
-            content: `${commenter.nickname || commenter.name || '用户'} 评论了你的提名`,
+            content: `匿名用户 评论了你的提名`,
             nominationId: nominationId,
             nominationTitle: nomination.name || '提名'
           }
@@ -500,10 +520,10 @@ async function createReplyNotification(nominationId, replyerId, receiverId, comm
           data: {
             receiverId: receiverId,
             senderId: replyerId,
-            senderName: replier.nickname || replier.name || '用户',
+            senderName: '匿名用户',
             senderAvatar: replier.avatar || '/images/placeholder-user.jpg',
             type: 'reply',
-            content: `${replier.nickname || replier.name || '用户'} 回复了你的评论`,
+            content: `匿名用户 回复了你的评论`,
             relatedId: commentId,
             nominationId: nominationId,
             nominationTitle: nomination.name || '提名'

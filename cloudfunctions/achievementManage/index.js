@@ -106,7 +106,7 @@ async function addAchievement(userId, achievement, openid) {
     type: achievement.type || 'neutral',
     location: achievement.location || '伦敦',
     creatorId: openid,
-    creatorName: userInfo.nickname || userInfo.name || '用户',
+    creatorName: '匿名用户',
     creatorAvatar: userInfo.avatar || '/images/placeholder-user.jpg',
     createTime: db.serverDate(),
     updateTime: db.serverDate()
@@ -180,13 +180,9 @@ async function getAchievements(userId) {
       console.error('[achievementManage] 获取用户信息失败:', error);
     }
     
-    // 确保每条事迹都有creatorName字段
+    // 确保每条事迹都有creatorName字段，且强制显示为匿名用户
     const achievements = achievementsResult.data.map(achievement => {
-      if (!achievement.creatorName && userInfo) {
-        achievement.creatorName = userInfo.nickname || userInfo.name || '匿名用户';
-      } else if (!achievement.creatorName) {
-        achievement.creatorName = '匿名用户';
-      }
+      achievement.creatorName = '匿名用户';
       return achievement;
     });
     

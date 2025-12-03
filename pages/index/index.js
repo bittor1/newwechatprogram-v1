@@ -226,8 +226,10 @@ Page({
   // 跳转到详情页 - 智能预加载优化
   goToDetail(e) {
     const id = e.currentTarget.dataset.id;
+    const rank = e.currentTarget.dataset.rank;
+    const totalEntries = this.data.rankings.length; // 总条目数，用于判断倒数三名
     
-    console.log('🎯 用户点击详情页，开始智能预加载:', id);
+    console.log('🎯 用户点击详情页，开始智能预加载:', id, '排名:', rank, '总数:', totalEntries);
     
     // 立即开始预加载数据
     const app = getApp();
@@ -235,7 +237,7 @@ Page({
     
     // 跳转到详情页
     wx.navigateTo({
-      url: `/pages/detail/detail?id=${id}`
+      url: `/pages/detail/detail?id=${id}&rank=${rank || ''}&total=${totalEntries || ''}`
     });
   },
   

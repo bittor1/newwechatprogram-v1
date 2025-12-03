@@ -10,8 +10,23 @@
     <text class="profile-title text-body">伦敦得吃王者</text>
     
     <view class="badge-row flex justify-center gap-12 my-16">
-      <view class="badge badge-red">🔥 火热榜首</view>
-      <view class="badge badge-purple">连续3周第一</view>
+      <!-- 标签1: 排名/成就 -->
+      <!-- 倒数三名优先：吃了胃疼 (totalEntries >= 3 且 rank > totalEntries - 3) -->
+      <view class="badge badge-gray" wx:if="{{totalEntries >= 3 && entryInfo.rank > totalEntries - 3}}">🤢 吃了胃疼</view>
+      <!-- 想吃数为负数（非倒数三名） -->
+      <view class="badge badge-gray" wx:elif="{{entryInfo.votes < 0}}">👍 不豪赤</view>
+      <!-- 正常排名标签 -->
+      <view class="badge badge-red" wx:elif="{{entryInfo.rank === 1}}">👍 此乃巨儒</view>
+      <view class="badge badge-orange" wx:elif="{{entryInfo.rank <= 3}}">👍 此乃英精</view>
+      <view class="badge badge-yellow" wx:elif="{{entryInfo.rank <= 10}}">👍 大英帝</view>
+      <view class="badge badge-purple" wx:elif="{{entryInfo.votes >= 100}}">👍 豪赤</view>
+      <view class="badge badge-blue" wx:else>👍 豪赤</view>
+      
+      <!-- 标签2: 趋势/状态 -->
+      <view class="badge badge-green" wx:if="{{entryInfo.trend === 'up'}}">🚀 排队得吃</view>
+      <view class="badge badge-blue" wx:elif="{{entryInfo.trend === 'stable'}}">🛡️ 稳定发挥</view>
+      <view class="badge badge-red" wx:elif="{{entryInfo.trend === 'down'}}">💔 没有行情</view>
+      <view class="badge badge-gray" wx:else>✨ 期待爆发</view>
     </view>
     
     <view class="points-display flex justify-center items-center">

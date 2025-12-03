@@ -85,6 +85,7 @@
           wx:key="id"
           bindtap="goToDetail"
           data-id="{{item.id}}"
+          data-rank="{{item.rank}}"
         >
           <!-- 排名标识 -->
           <view class="rank-indicator flex justify-center items-center">

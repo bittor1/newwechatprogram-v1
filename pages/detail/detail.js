@@ -6,6 +6,8 @@ Page({
     // 提名条目信息
     entryInfo: {},
     entryId: '',
+    currentRank: null,
+    totalEntries: null, // 总条目数，用于判断倒数三名
     
     // 缓存相关
     dataCache: {
@@ -89,7 +91,10 @@ Page({
     
     // 骨架屏控制
     showSkeleton: true,
-    contentLoaded: false
+    contentLoaded: false,
+    
+    // 订阅消息控制
+    hasRequestedSubscribe: false // 标记当前页面是否已请求过订阅
   },
 
   onLoad: function(options) {
@@ -97,10 +102,15 @@ Page({
     
     // 获取条目ID
     var entryId = options.id;
+    var rank = options.rank ? parseInt(options.rank) : null;
+    var total = options.total ? parseInt(options.total) : null;
     
     if (entryId) {
       this.setData({
-        entryId: entryId
+        entryId: entryId,
+        currentRank: rank,
+        totalEntries: total,
+        'entryInfo.rank': rank // 预先设置排名
       });
       
       // 并行加载页面数据
@@ -119,6 +129,16 @@ Page({
   onShow: function() {
     // 智能重新加载：只在必要时更新
     if (this.data.entryId) {
+      // 兜底逻辑：如果内容未加载（可能是上次加载失败或中断），强制加载
+      if (!this.data.contentLoaded) {
+        console.log('⚠️ onShow: 内容未加载，强制重新加载');
+        this.setData({
+          'loadingStatus.isLoading': false // 重置加载锁
+        });
+        this.loadPageDataParallel();
+        return;
+      }
+
       // 如果缓存已过期，才重新加载
       if (!this.isCacheValid()) {
         console.log('🔄 onShow: 缓存过期，重新加载数据');
@@ -370,72 +390,100 @@ Page({
     if (preloadedData) {
       console.log('⚡ 使用预加载数据，超快速度！');
       
-      // 应用预加载数据
-      if (preloadedData.entryData && preloadedData.entryData.data) {
-        var entryInfo = preloadedData.entryData.data;
-        this.updateCache('entryInfo', entryInfo);
-        
-        // 根据网络状况优化图片URL
-        var networkStrategy = app.networkManager.getLoadingStrategy();
-        var optimizedAvatarUrl = app.imageOptimizer.optimizeImageUrl(
-          entryInfo.avatarUrl || entryInfo.avatar, 
-          networkStrategy.imageQuality
-        );
-        var optimizedGifUrl = app.imageOptimizer.checkGifSize(entryInfo.gifUrl);
-        
-        // 预加载关键图片
-        var imagesToPreload = [optimizedAvatarUrl];
-        if (optimizedGifUrl) imagesToPreload.push(optimizedGifUrl);
-        app.imageOptimizer.preloadImages(imagesToPreload);
-        
-        this.setData({
-          entryInfo: Object.assign({}, entryInfo, {
-            avatarUrl: optimizedAvatarUrl,
-            gifUrl: optimizedGifUrl
-          }),
-          shareInfo: {
-            title: '来看看' + entryInfo.name + '的得吃档案',
-            path: '/pages/detail/detail?id=' + this.data.entryId,
-            imageUrl: optimizedAvatarUrl || '/images/placeholder-user.jpg'
-          },
-          showSkeleton: false,
-          contentLoaded: true,
-          'loadingStatus.isLoading': false
-        });
-      }
-      
-      if (preloadedData.commentData && preloadedData.commentData.result && preloadedData.commentData.result.success) {
-        var comments = preloadedData.commentData.result.comments || [];
-        var commentData = {
-          data: comments,
-          total: preloadedData.commentData.result.total || 0
-        };
-        this.updateCache('comments', commentData);
-        
-        this.setData({
-          comments: comments,
-          commentCount: preloadedData.commentData.result.total || 0,
-          hasMoreComments: comments.length >= 10
-        });
-      }
-      
-      // 后台加载其他数据
-      this.loadSecondaryData();
-      
-      var endTime = Date.now();
-      var loadTime = 0;
       try {
-        loadTime = performanceTracker ? performanceTracker.end() : 0;
-      } catch (e) {
-        console.warn('⚠️ 性能监控结束失败:', e);
+        // 应用预加载数据
+        if (preloadedData.entryData && preloadedData.entryData.data) {
+          var entryInfo = preloadedData.entryData.data;
+          this.updateCache('entryInfo', entryInfo);
+          
+          // 根据网络状况优化图片URL
+          var networkStrategy = app.networkManager.getLoadingStrategy();
+          var optimizedAvatarUrl = app.imageOptimizer.optimizeImageUrl(
+            entryInfo.avatarUrl || entryInfo.avatar, 
+            networkStrategy.imageQuality
+          );
+          var optimizedGifUrl = app.imageOptimizer.checkGifSize(entryInfo.gifUrl);
+          
+          // 预加载关键图片
+          var imagesToPreload = [optimizedAvatarUrl];
+          if (optimizedGifUrl) imagesToPreload.push(optimizedGifUrl);
+          app.imageOptimizer.preloadImages(imagesToPreload);
+          
+          // 保持rank信息
+          if (this.data.currentRank) {
+            entryInfo.rank = this.data.currentRank;
+          }
+
+          this.setData({
+            entryInfo: Object.assign({}, entryInfo, {
+              avatarUrl: optimizedAvatarUrl,
+              gifUrl: optimizedGifUrl
+            }),
+            shareInfo: {
+              title: '来看看' + entryInfo.name + '的得吃档案',
+              path: '/pages/detail/detail?id=' + this.data.entryId,
+              imageUrl: optimizedAvatarUrl || '/images/placeholder-user.jpg'
+            },
+            showSkeleton: false,
+            contentLoaded: true,
+            'loadingStatus.isLoading': false
+          });
+        } else {
+          // 预加载数据不完整，回退到普通加载
+          console.warn('⚠️ 预加载数据不完整，回退到普通加载');
+          throw new Error('预加载数据不完整');
+        }
+        
+        if (preloadedData.commentData && preloadedData.commentData.result && preloadedData.commentData.result.success) {
+          var comments = preloadedData.commentData.result.comments || [];
+          
+          // 前端强制匿名化兜底
+          comments = comments.map(function(c) {
+            c.creatorName = '匿名用户';
+            if (c.replies) {
+              c.replies = c.replies.map(function(r) {
+                r.creatorName = '匿名用户';
+                if (r.replyTo) r.replyTo.userName = '匿名用户';
+                return r;
+              });
+            }
+            return c;
+          });
+
+          var commentData = {
+            data: comments,
+            total: preloadedData.commentData.result.total || 0
+          };
+          this.updateCache('comments', commentData);
+          
+          this.setData({
+            comments: comments,
+            commentCount: preloadedData.commentData.result.total || 0,
+            hasMoreComments: comments.length >= 10
+          });
+        }
+        
+        // 后台加载其他数据
+        this.loadSecondaryData();
+        
+        var endTime = Date.now();
+        var loadTime = 0;
+        try {
+          loadTime = performanceTracker ? performanceTracker.end() : 0;
+        } catch (e) {
+          console.warn('⚠️ 性能监控结束失败:', e);
+        }
+        console.log('🚀 预加载数据应用完成，耗时:', endTime - startTime, 'ms');
+        
+        // 输出性能报告
+        var report = app.performanceMonitor.getPerformanceReport();
+        console.log('📊 性能报告:', report);
+        
+        return;
+      } catch (err) {
+        console.error('❌ 处理预加载数据失败，转为普通加载:', err);
+        // 出错后不 return，继续执行下面的普通加载逻辑
       }
-      console.log('🚀 预加载数据应用完成，耗时:', endTime - startTime, 'ms');
-      
-      // 输出性能报告
-      var report = app.performanceMonitor.getPerformanceReport();
-      console.log('📊 性能报告:', report);
-      
-      return;
     }
     
     // 显示主加载状态
@@ -502,6 +550,11 @@ Page({
         if (optimizedGifUrl) imagesToPreload.push(optimizedGifUrl);
         app.imageOptimizer.preloadImages(imagesToPreload);
         
+        // 保持rank信息
+        if (this.data.currentRank) {
+          optimizedEntryInfo.rank = this.data.currentRank;
+        }
+
         this.setData({
           entryInfo: optimizedEntryInfo,
           shareInfo: {
@@ -546,6 +599,20 @@ Page({
       console.log('✅ 评论数据加载完成');
       if (res.result && res.result.success) {
         var comments = res.result.comments || [];
+        
+        // 前端强制匿名化兜底
+        comments = comments.map(function(c) {
+          c.creatorName = '匿名用户';
+          if (c.replies) {
+            c.replies = c.replies.map(function(r) {
+              r.creatorName = '匿名用户';
+              if (r.replyTo) r.replyTo.userName = '匿名用户';
+              return r;
+            });
+          }
+          return c;
+        });
+
         var commentData = {
           data: comments,
           total: res.result.total || 0
@@ -656,6 +723,12 @@ Page({
         if (res.result && res.result.success) {
           var achievements = res.result.achievements || [];
           
+          // 前端强制匿名化兜底
+          achievements = achievements.map(function(a) {
+            a.creatorName = '匿名用户';
+            return a;
+          });
+          
           // 更新缓存
           this.updateCache('achievements', achievements);
           
@@ -762,8 +835,15 @@ Page({
       console.log('事迹加载结果:', res);
       
       if (res.result && res.result.success) {
+        var achievements = res.result.achievements || [];
+        // 前端强制匿名化兜底
+        achievements = achievements.map(function(a) {
+          a.creatorName = '匿名用户';
+          return a;
+        });
+
         this.setData({
-          achievements: res.result.achievements || []
+          achievements: achievements
         });
       }
     }).catch(err => {
@@ -790,6 +870,20 @@ Page({
       
       if (res.result && res.result.success) {
         var newComments = res.result.comments || [];
+        
+        // 前端强制匿名化兜底
+        newComments = newComments.map(function(c) {
+          c.creatorName = '匿名用户';
+          if (c.replies) {
+            c.replies = c.replies.map(function(r) {
+              r.creatorName = '匿名用户';
+              if (r.replyTo) r.replyTo.userName = '匿名用户';
+              return r;
+            });
+          }
+          return c;
+        });
+
         var comments = isLoadMore ? this.data.comments.concat(newComments) : newComments;
         
         this.setData({
@@ -1043,6 +1137,40 @@ Page({
 
   // 处理评论提交
   processSubmitComment: function(content) {
+    var that = this;
+    
+    // 如果当前页面已经请求过授权，或者用户之前勾选了"总是保持"，则不再重复打扰
+    // 注意：这会导致用户在当前页面多次评论也只能积攒一次通知额度
+    if (this.data.hasRequestedSubscribe) {
+      console.log('当前页面已请求过订阅，直接提交');
+      that.executeSubmitComment(content);
+      return;
+    }
+
+    var tmplId = 'SBgrWcE3FHh4GzHmBr34TXbUb4nJA32VxOgh_9KcP8E'; // 订阅消息模板ID
+
+    // 请求订阅消息授权
+    wx.requestSubscribeMessage({
+      tmplIds: [tmplId],
+      success: function(res) {
+        console.log('订阅消息授权结果:', res);
+      },
+      fail: function(err) {
+        console.error('订阅消息授权失败:', err);
+      },
+      complete: function() {
+        // 标记已请求过
+        that.setData({
+          hasRequestedSubscribe: true
+        });
+        // 无论授权成功与否，都继续提交评论
+        that.executeSubmitComment(content);
+      }
+    });
+  },
+
+  // 执行评论提交（原处理逻辑）
+  executeSubmitComment: function(content) {
     wx.showLoading({
       title: '提交中...'
     });
@@ -1196,7 +1324,13 @@ Page({
         // 更新评论列表中的回复
         var comments = this.data.comments.map(comment => {
           if (comment._id === commentId) {
-            comment.replies = res.result.replies || [];
+            var replies = res.result.replies || [];
+            // 前端强制匿名化兜底
+            comment.replies = replies.map(function(r) {
+              r.creatorName = '匿名用户';
+              if (r.replyTo) r.replyTo.userName = '匿名用户';
+              return r;
+            });
           }
           return comment;
         });

@@ -21,8 +21,6 @@ exports.main = async (event, context) => {
   switch (action) {
     case 'getUserVotes':
       return await getUserVotes(OPENID, event.userId)
-    case 'addFreeVote':
-      return await addFreeVote(OPENID, targetId)
     case 'getVoteSummary':
       return await getVoteSummary(targetId)
     case 'vote': // 新的投票逻辑
@@ -136,176 +134,6 @@ async function getUserVotes(openid, userId) {
     return {
       success: false,
       message: '获取用户投票记录失败',
-      error: err.message
-    }
-  }
-}
-
-/**
- * 添加免费投票（每个用户每天对每个条目限一次）
- * @param {string} openid 用户的openid
- * @param {string} targetId 投票目标ID
- */
-async function addFreeVote(openid, targetId) {
-  if (!targetId) {
-    return {
-      success: false,
-      message: '缺少目标ID'
-    }
-  }
-  
-  try {
-    // 获取用户信息
-    const userRes = await db.collection('users').where({
-      _openid: openid
-    }).get()
-    
-    if (!userRes.data || userRes.data.length === 0) {
-      return {
-        success: false,
-        message: '用户不存在'
-      }
-    }
-    
-    const userId = userRes.data[0]._id
-    
-    // 检查今天是否已经对该条目进行过免费投票
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    const voteRes = await votesCollection
-      .where({
-        userId: userId,
-        targetId: targetId,
-        type: 'free',
-        createTime: _.gte(today)
-      })
-      .get()
-    
-    if (voteRes.data && voteRes.data.length > 0) {
-      return {
-        success: false,
-        message: '今日已对此条目进行过免费投票'
-      }
-    }
-    
-    // 添加投票记录
-    const voteData = {
-      userId: userId,
-      targetId: targetId,
-      count: 1,
-      type: 'free',
-      createTime: new Date()
-    }
-    
-    await votesCollection.add({
-      data: voteData
-    })
-    
-    // 更新条目的票数
-    await entriesCollection.doc(targetId).update({
-      data: {
-        votes: _.inc(1),
-        trend: 'up'
-      }
-    })
-    
-    // 创建投票通知
-    await createVoteNotification(targetId, userId);
-
-    return {
-      success: true,
-      message: '投票成功'
-    }
-  } catch (err) {
-    console.error('免费投票失败:', err)
-    return {
-      success: false,
-      message: '投票失败',
-      error: err.message
-    }
-  }
-}
-
-/**
- * 减票操作（移除用户的投票）
- * @param {string} openid 用户的openid
- * @param {string} targetId 投票目标ID
- */
-async function removeFreeVote(openid, targetId) {
-  if (!targetId) {
-    return {
-      success: false,
-      message: '缺少目标ID'
-    }
-  }
-  
-  try {
-    // 获取用户信息
-    const userRes = await db.collection('users').where({
-      _openid: openid
-    }).get()
-    
-    if (!userRes.data || userRes.data.length === 0) {
-      return {
-        success: false,
-        message: '用户不存在'
-      }
-    }
-    
-    const userId = userRes.data[0]._id
-    
-    // 检查用户是否对该条目投过票
-    const voteRes = await votesCollection
-      .where({
-        userId: userId,
-        targetId: targetId
-      })
-      .get()
-    
-    if (!voteRes.data || voteRes.data.length === 0) {
-      return {
-        success: false,
-        message: '您还未对此条目投票，无法减票'
-      }
-    }
-    
-    // 删除投票记录
-    await votesCollection.where({
-      userId: userId,
-      targetId: targetId
-    }).remove()
-    
-    // 更新条目的票数
-    const entryRes = await entriesCollection.doc(targetId).get()
-    if (!entryRes.data) {
-      return {
-        success: false,
-        message: '条目不存在'
-      }
-    }
-    
-    // 直接减1，允许票数为负数
-    const currentVotes = entryRes.data.votes || 0
-    const newVotes = currentVotes - 1
-    
-    await entriesCollection.doc(targetId).update({
-      data: {
-        votes: newVotes,
-        trend: 'down'
-      }
-    })
-    
-    return {
-      success: true,
-      message: '减票成功',
-      newVotes: newVotes
-    }
-  } catch (err) {
-    console.error('减票失败:', err)
-    return {
-      success: false,
-      message: '减票失败',
       error: err.message
     }
   }
@@ -580,6 +408,8 @@ async function performVote(openid, entryId, voteType) {
  * @param {boolean} isUpvote 是否是想吃（true）还是拒吃（false）
  */
 async function executeVoteDirectly(openid, entryId, isUpvote) {
+  console.log('[executeVoteDirectly] 开始执行投票, isUpvote:', isUpvote, 'entryId:', entryId);
+  
   try {
     // 获取用户信息
     const userRes = await db.collection('users').where({
@@ -594,9 +424,11 @@ async function executeVoteDirectly(openid, entryId, isUpvote) {
     }
     
     const userId = userRes.data[0]._id;
+    console.log('[executeVoteDirectly] 用户ID:', userId);
     
     if (isUpvote) {
       // 想吃：添加想吃投票记录并增加votes计数
+      console.log('[executeVoteDirectly] 执行想吃逻辑，增加票数');
       await votesCollection.add({
         data: {
           userId: userId,
@@ -609,10 +441,14 @@ async function executeVoteDirectly(openid, entryId, isUpvote) {
       // 增加条目的想吃票数
       await entriesCollection.doc(entryId).update({
         data: {
-          votes: _.inc(1)
+          votes: _.inc(1),
+          trend: 'up'
         }
       });
       
+      // 创建投票通知
+      await createVoteNotification(entryId, userId);
+
       return {
         success: true,
         message: '想吃成功'
@@ -620,6 +456,8 @@ async function executeVoteDirectly(openid, entryId, isUpvote) {
       
     } else {
       // 拒吃：删除想吃投票记录并减少votes计数
+      console.log('[executeVoteDirectly] 执行拒吃逻辑，减少票数');
+      
       const voteRes = await votesCollection.where({
         userId: userId,
         targetId: entryId,
@@ -629,14 +467,18 @@ async function executeVoteDirectly(openid, entryId, isUpvote) {
       if (voteRes.data.length > 0) {
         // 删除想吃投票记录
         await votesCollection.doc(voteRes.data[0]._id).remove();
+        console.log('[executeVoteDirectly] 删除了一条想吃投票记录');
       }
       
       // 无论是否有想吃投票记录，都要减少票数（票数可以为负数）
+      console.log('[executeVoteDirectly] 准备减少票数 votes: _.inc(-1)');
       await entriesCollection.doc(entryId).update({
         data: {
-          votes: _.inc(-1)
+          votes: _.inc(-1),
+          trend: 'down'
         }
       });
+      console.log('[executeVoteDirectly] 票数减少成功');
       
       return {
         success: true,
