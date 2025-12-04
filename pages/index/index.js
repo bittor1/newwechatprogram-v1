@@ -24,7 +24,11 @@ Page({
     },
     isRefreshing: false, // 防止重复刷新
     hasInitialized: false, // 标记是否已初始化
-    _pendingAction: null // 待执行的操作
+    _pendingAction: null, // 待执行的操作
+    
+    // 滚动位置相关
+    scrollTop: 0, // 当前滚动位置
+    _savedScrollTop: 0 // 保存的滚动位置（用于返回时恢复）
   },
 
   onLoad() {
@@ -78,11 +82,39 @@ Page({
   },
   
   onShow() {
-    // 如果已经初始化过，使用常规加载
+    // 如果已经初始化过
     if (this.data.hasInitialized) {
-      this.loadData();
+      // 恢复之前保存的滚动位置
+      const savedPosition = this.data._savedScrollTop;
+      if (savedPosition > 0) {
+        console.log('恢复滚动位置:', savedPosition);
+        // 使用 nextTick 确保页面渲染完成后再设置滚动位置
+        // 先设置为0，再设置为目标位置，确保触发滚动
+        wx.nextTick(() => {
+          this.setData({ scrollTop: 0 }, () => {
+            setTimeout(() => {
+              this.setData({ scrollTop: savedPosition });
+            }, 50);
+          });
+        });
+      }
+      
+      // 静默更新数据，不显示加载状态，不重置滚动位置
+      this.silentRefreshData();
     }
     // 否则等待 onLoad 中的初始化完成
+  },
+
+  onHide() {
+    // 页面隐藏时保存当前滚动位置
+    // _savedScrollTop 已经在 onPageScroll 中实时更新
+    console.log('页面隐藏，保存滚动位置:', this.data._savedScrollTop);
+  },
+
+  // 监听页面滚动，保存滚动位置
+  onPageScroll(e) {
+    // 实时保存滚动位置
+    this.data._savedScrollTop = e.detail.scrollTop;
   },
 
   // 加载数据
@@ -209,6 +241,50 @@ Page({
         wx.showToast({
           title: '刷新数据失败',
           icon: 'none'
+        });
+      });
+  },
+
+  // 静默刷新数据（不显示加载状态，不重置滚动位置）
+  silentRefreshData() {
+    // 防止重复刷新
+    if (this.data.isRefreshing) {
+      console.log('正在刷新中，跳过重复请求');
+      return;
+    }
+    
+    const app = getApp();
+    this.setData({ isRefreshing: true });
+
+    // 静默刷新排行榜数据
+    app.refreshRankingData()
+      .then((rankings) => {
+        // 确保rankings是有效的数组
+        const validRankings = Array.isArray(rankings) ? rankings : app.globalData.rankings || [];
+        
+        // 计算总投票数
+        const totalVotes = this.calculateTotalVotes(validRankings);
+        
+        // 计算超过百人想吃的人数
+        const totalPopular = this.calculatePopularUsers(validRankings);
+        
+        // 静默更新数据，不改变 isLoading 状态
+        this.setData({
+          rankings: validRankings,
+          totalVotes: totalVotes,
+          totalUsers: totalPopular,
+          isRefreshing: false
+        });
+
+        // 静默刷新统计数据
+        this.loadStatistics();
+        
+        console.log('静默刷新数据完成');
+      })
+      .catch(err => {
+        console.error('静默刷新数据失败:', err);
+        this.setData({
+          isRefreshing: false
         });
       });
   },

@@ -390,40 +390,35 @@ App({
     this.refreshRankingData();
   },
   
-  // 从云数据库刷新排行榜数据
+  // 从云函数获取排行榜数据（解决未登录用户权限问题）
   refreshRankingData() {
     return new Promise((resolve) => {
       // 如果云开发已初始化
       if (wx.cloud) {
-        // 查询所有提名
-        const db = wx.cloud.database();
-        const _ = db.command;
-        db.collection('entries')
-          .where({
-            // 获取所有条目，包括负数票的
-            // 使用 _.exists(true) 确保 votes 字段存在
-            votes: _.exists(true)
-          })
-          .orderBy('votes', 'desc')
-          .orderBy('_createTime', 'desc') // 票数相同时，新上榜的排在上面
-          .limit(50) // 增加限制数量，确保能看到更多提名
-          .get()
-          .then(res => {
-            console.log('获取排行榜数据成功:', res);
+        // 使用云函数获取数据，避免客户端权限问题
+        wx.cloud.callFunction({
+          name: 'getRankingData',
+          data: {}
+        }).then(res => {
+          console.log('📊 云函数返回结果:', res.result);
+          
+          if (res.result && res.result.success) {
+            const allData = res.result.data || [];
+            console.log('✅ 获取排行榜数据成功，共', allData.length, '条');
             
-            // 如果数据库有数据，使用数据库数据
-            if (res.data && res.data.length > 0) {
-              const rankings = res.data.map((item, index) => {
+            if (allData.length > 0) {
+              // 数据已在云函数中排序，直接映射
+              const rankings = allData.map((item, index) => {
                 return {
                   id: item._id,
                   rank: index + 1,
-                  name: item.name,
+                  name: this.maskName(item.name), // 隐藏部分名字，保护隐私
                   avatar: item.avatarUrl,
-                  votes: item.votes !== undefined ? item.votes : 0, // 支持负数
+                  votes: item.votes !== undefined ? item.votes : 0, // 支持负数和0
                   trend: item.trend || 'stable',
                   hotLevel: item.hotLevel || 1,
                   isGif: item.isGif || false,
-                  createTime: item._createTime || item.createdAt || Date.now(), // 包含创建时间用于排序
+                  createTime: item._createTime || item.createdAt || Date.now(),
                 };
               });
               
@@ -435,29 +430,59 @@ App({
             }
             
             resolve(this.globalData.rankings);
-          })
-          .catch(err => {
-            console.error('获取排行榜数据失败:', err);
-            // 显示友好的错误提示
+          } else {
+            console.error('❌ 云函数返回失败:', res.result?.error);
             wx.showToast({
               title: '获取数据失败，请重试',
               icon: 'none'
             });
-            // 返回空数组而不是拒绝
             this.globalData.rankings = [];
             resolve(this.globalData.rankings);
+          }
+        }).catch(err => {
+          console.error('❌ 调用云函数失败:', err);
+          wx.showToast({
+            title: '获取数据失败，请重试',
+            icon: 'none'
           });
+          this.globalData.rankings = [];
+          resolve(this.globalData.rankings);
+        });
       } else {
         console.error('云开发未初始化');
         wx.showToast({
           title: '系统初始化失败',
           icon: 'none'
         });
-        // 返回空数组而不是拒绝
         this.globalData.rankings = [];
         resolve(this.globalData.rankings);
       }
     });
+  },
+
+  // 隐藏名字中间部分，保护用户隐私
+  // "张三" → "张*"，"张三丰" → "张*丰"，"欧阳修明" → "欧**明"
+  maskName: function(name) {
+    if (!name || typeof name !== 'string') {
+      return '匿名用户';
+    }
+    
+    const len = name.length;
+    
+    if (len === 1) {
+      // 单字名：保持原样（无法隐藏）
+      return name;
+    } else if (len === 2) {
+      // 两字名："张三" → "张*"
+      return name[0] + '*';
+    } else if (len === 3) {
+      // 三字名："张三丰" → "张*丰"
+      return name[0] + '*' + name[2];
+    } else {
+      // 四字及以上："欧阳修明" → "欧**明"
+      const stars = '*'.repeat(len - 2);
+      return name[0] + stars + name[len - 1];
+    }
   },
   
   // 检查用户是否已登录（基于token验证）

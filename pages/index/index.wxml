@@ -76,6 +76,8 @@
       scroll-y="true"
       enable-back-to-top="true"
       scroll-anchoring="true"
+      scroll-top="{{scrollTop}}"
+      bindscroll="onPageScroll"
       wx:elif="{{rankings.length > 0}}"
     >
       <view class="ranking-list px-20">

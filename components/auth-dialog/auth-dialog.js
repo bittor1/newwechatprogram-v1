@@ -117,6 +117,11 @@ Component({
       });
       
       try {
+        // 0. 先进行静默登录，确保有权限访问云资源
+        console.log('🔐 开始静默登录...');
+        await this.ensureLogin();
+        console.log('✅ 静默登录完成');
+        
         console.log('📤 开始上传头像到云存储...');
         console.log('头像文件路径:', this.data.avatarUrl);
         
@@ -248,6 +253,53 @@ Component({
       wx.showToast({
         title: '请重新选择头像',
         icon: 'none'
+      });
+    },
+
+    // 确保用户已登录（静默登录，获取openid以便访问云资源）
+    ensureLogin() {
+      return new Promise((resolve, reject) => {
+        const app = getApp();
+        
+        // 如果已经有openid，直接返回
+        if (app.globalData.openid) {
+          console.log('✅ 已有openid，跳过静默登录');
+          resolve();
+          return;
+        }
+        
+        // 调用wx.login获取code
+        wx.login({
+          success: (res) => {
+            if (res.code) {
+              console.log('✅ 获取到登录code');
+              // 调用login云函数获取openid
+              wx.cloud.callFunction({
+                name: 'login',
+                data: { code: res.code }
+              }).then(loginRes => {
+                console.log('✅ 静默登录成功');
+                if (loginRes.result && loginRes.result.success && loginRes.result.data) {
+                  app.globalData.openid = loginRes.result.data.openid;
+                }
+                resolve();
+              }).catch(err => {
+                console.error('❌ 静默登录云函数失败:', err);
+                // 即使静默登录失败，也尝试继续（可能云开发已开启未登录访问）
+                resolve();
+              });
+            } else {
+              console.error('❌ wx.login失败');
+              // 即使失败也尝试继续
+              resolve();
+            }
+          },
+          fail: (err) => {
+            console.error('❌ wx.login调用失败:', err);
+            // 即使失败也尝试继续
+            resolve();
+          }
+        });
       });
     },
 
